@@ -1,0 +1,17 @@
+[package]
+name = "competition-archive"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "ahc35_rand"
+path = "ahc/35/35_rand.rs"
+
+[[bin]]
+name = "ahc37"
+path = "ahc/37/37.rs"
+
+[dependencies]
+proconio = "0.5.0"
+rand = "0.8.4"
+rand_pcg = "0.3.1"

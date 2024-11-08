@@ -11,4 +11,6 @@ __pycache__/
 # Jupyter Notebook
 .ipynb_checkpoints
 
+# general
 *.txt
+exp.py

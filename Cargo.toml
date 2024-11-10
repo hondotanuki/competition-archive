@@ -4,12 +4,20 @@ version = "0.1.0"
 edition = "2021"
 
 [[bin]]
-name = "ahc35_rand"
-path = "ahc/35/35_rand.rs"
+name = "ahc35test"
+path = "ahc/35/35_testcase.rs"
+
+[[bin]]
+name = "ahc35"
+path = "ahc/35/35.rs"
 
 [[bin]]
 name = "ahc37"
 path = "ahc/37/37.rs"
+
+[[bin]]
+name = "ahc39"
+path = "ahc/39/39.rs"
 
 [dependencies]
 proconio = "0.5.0"

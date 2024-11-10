@@ -22,7 +22,6 @@ fn main() {
         let mut min_score_u: Option<Node> = None;
         let mut min_score_v: Option<Node> = None;
 
-        // 毎回クローンした方が早い
         let node_vec: Vec<Node> = nodes.iter().cloned().collect();
         let current_len = node_vec.len();
 
@@ -59,7 +58,7 @@ fn main() {
         }
     }
 
-    // 最後の一点は結べないので手動で結ぶ
+    // 最後の一点は手動で結ぶ
     if let Some(&(x, y)) = nodes.iter().next() {
         if x != 0 || y != 0 {
             rev_soda.push([0, 0, x, y]);

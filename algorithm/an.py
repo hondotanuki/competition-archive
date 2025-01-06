@@ -1,4 +1,4 @@
-from math import exp
+import math
 import random
 from tqdm import tqdm
 
@@ -20,6 +20,7 @@ class SimulatedAnnealing:
         random_state: int,
         phase_weights: list[float],
         phase_boundaries: list[float],
+        visited: set[str],
     ):
         # 焼きなまし法のための変数
         self.start_temp = start_temp
@@ -33,9 +34,12 @@ class SimulatedAnnealing:
             self._neighbor_insertion,
             self._neighbor_reverse,
             self._neighbor_block_move,
+            self._swap_two_random_ranges,
+            self._swap_and_shuffle_two_random_ranges,
         ]
         self.phase_weights = phase_weights
         self.phase_boundaries = phase_boundaries
+        self.visited = visited
 
     def _neighbor_swap(self, solution):
         """ランダムな2単語を入れ替え"""
@@ -71,6 +75,34 @@ class SimulatedAnnealing:
             neighbor.insert(k + idx, w)
         return neighbor
 
+    def _swap_two_random_ranges(self, solution):
+        """ランダムな二つの範囲の要素を入れ替え"""
+        n = len(solution)
+
+        while True:
+            a_start = random.randrange(n)
+            a_end = random.randrange(a_start + 1, n + 1)  # a_start < a_end
+
+            b_start = random.randrange(n)
+            b_end = random.randrange(b_start + 1, n + 1)  # b_start < b_end
+
+            # 重ならないようにチェック
+            if a_end <= b_start or b_end <= a_start:
+                break
+
+        if b_start < a_start:
+            a_start, a_end, b_start, b_end = b_start, b_end, a_start, a_end
+
+        # ここまでくれば必ず a_start < b_start
+        part_before_A = solution[:a_start]
+        A_part = solution[a_start:a_end]
+        middle = solution[a_end:b_start]
+        B_part = solution[b_start:b_end]
+        part_after_B = solution[b_end:]
+
+        neighbor = part_before_A + B_part + middle + A_part + part_after_B
+        return neighbor
+
     def _get_phase(self, step_ratio):
         """進捗率に応じたフェーズ(0,1,2...)を返す"""
         for i, boundary in enumerate(self.phase_boundaries):
@@ -88,7 +120,7 @@ class SimulatedAnnealing:
         """焼きなまし法の受容確率"""
         if new_energy < current_energy:
             return 1.0
-        return exp((current_energy - new_energy) / temperature)
+        return math.exp((current_energy - new_energy) / temperature)
 
     def _lower_temperature(self, temperature):
         """線形に温度を下げる"""
@@ -112,6 +144,7 @@ class SimulatedAnnealing:
             # 近傍解を生成
             new_solution = neighbor_func(current_solution)
             new_text = " ".join(new_solution)
+            self.visited.add(new_text)
             new_energy = scorer.get_perplexity(new_text)
 
             # 焼きなまし
@@ -126,11 +159,11 @@ class SimulatedAnnealing:
             if new_energy < best_energy:
                 best_solution = new_solution.copy()
                 best_energy = new_energy
-                print(f"best_score: {neighbor_func}")
-                print(f"best_score: {best_energy}")
+                print(f"neighbor_func: {neighbor_func}")
+                print(f"best_score!!!!!: {best_energy}")
 
             # 温度減少関数
-            temperature = self._lower_temperature(temperature)
+            temperature -= (self.Tmax - self.Tmin) / self.nsteps
 
             # log
             log_energies.append(current_energy)

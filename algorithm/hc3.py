@@ -1,5 +1,4 @@
 import random
-from typing import Literal
 from tqdm import tqdm
 
 
@@ -9,56 +8,54 @@ class A:
 
 
 scorer = A
+visited = set()
 
 
 class HillClimbing:
     def __init__(
         self,
-        max_iterations: int,
+        max_iter: int,
         random_state: int,
         generation_attempts: int,
+        max_blocks: int,
+        neighbor_weights: list[float],
         visited: set[str],
-        function_selector: list[
-            Literal[
-                "swap",
-                "insertion",
-                "reverse",
-                "block",
-                "swap_block",
-                "swap_shuffle_block",
-            ]
-        ],
     ):
-        self.max_iterations = max_iterations
+        self.max_iter = max_iter
         random.seed(random_state)
 
-        # 状態遷移関数管理
-        neighbor_all = {
-            "swap": self._neighbor_swap,
-            "insertion": self._neighbor_insertion,
-            "reverse": self._neighbor_reverse,
-            "block": self._neighbor_block_move,
-            "swap_block": self._swap_two_random_ranges,
-            "swap_shuffle_block": self._swap_and_shuffle_two_random_ranges,
-        }
-        self.neighbor_funcs = []
-        for k in function_selector:
-            self.neighbor_funcs.append(neighbor_all[k])
-        assert self.neighbor_funcs, "状態遷移関数が定義されていない"
+        # 未到達近傍解の探索上限
+        self.generation_attempts = generation_attempts
 
-        # 文字列の再探索対策
+        # 近傍生成関数の適用回数
+        self.max_blocks = max_blocks
+        self.neighbor_weights = neighbor_weights
+        self.neighbor_funcs = (
+            self._swap_adjacent_words,
+            self._swap_random_words,
+            self._random_insertion,
+            self._swap_random_subsequences,
+            self._reorder_random_blocks,
+            self._swap_and_shuffle_two_random_ranges,
+        )
         self.visited = visited
-        self.generation_attempts = generation_attempts  # 山登り法用
 
-    def _neighbor_swap(self, solution):
+    def _swap_adjacent_words(self, solution):
+        """隣接する2単語を入れ替え"""
+        neighbor = solution.copy()
+        i = random.randint(0, len(neighbor) - 2)
+        neighbor[i], neighbor[i + 1] = neighbor[i + 1], neighbor[i]
+        return neighbor
+
+    def _swap_random_words(self, solution):
         """ランダムな2単語を入れ替え"""
         neighbor = solution.copy()
         i, j = random.sample(range(len(neighbor)), 2)
         neighbor[i], neighbor[j] = neighbor[j], neighbor[i]
         return neighbor
 
-    def _neighbor_insertion(self, solution):
-        """ある単語を抜き取り、別のランダムな位置に挿入 (Insertion)"""
+    def _random_insertion(self, solution):
+        """ランダムに範囲を抜き取り再挿入 (Insertion)"""
         neighbor = solution.copy()
         i = random.randrange(len(neighbor))
         word = neighbor.pop(i)
@@ -66,26 +63,8 @@ class HillClimbing:
         neighbor.insert(j, word)
         return neighbor
 
-    def _neighbor_reverse(self, solution):
-        """部分反転 (Reverse)"""
-        neighbor = solution.copy()
-        i, j = sorted(random.sample(range(len(neighbor)), 2))
-        neighbor[i : j + 1] = reversed(neighbor[i : j + 1])
-        return neighbor
-
-    def _neighbor_block_move(self, solution):
-        """連続ブロックを取り出し別の位置に挿入 (Block Move)"""
-        neighbor = solution.copy()
-        i, j = sorted(random.sample(range(len(neighbor)), 2))
-        block = neighbor[i : j + 1]
-        del neighbor[i : j + 1]
-        k = random.randrange(len(neighbor) + 1)
-        for idx, w in enumerate(block):
-            neighbor.insert(k + idx, w)
-        return neighbor
-
-    def _swap_two_random_ranges(self, solution):
-        """ランダムな二つの範囲の要素を入れ替え"""
+    def _swap_random_subsequences(self, solution):
+        """ランダムな二つ範囲を入れ替え"""
         n = len(solution)
 
         while True:
@@ -102,7 +81,6 @@ class HillClimbing:
         if b_start < a_start:
             a_start, a_end, b_start, b_end = b_start, b_end, a_start, a_end
 
-        # ここまでくれば必ず a_start < b_start
         part_before_A = solution[:a_start]
         A_part = solution[a_start:a_end]
         middle = solution[a_end:b_start]
@@ -110,6 +88,35 @@ class HillClimbing:
         part_after_B = solution[b_end:]
 
         neighbor = part_before_A + B_part + middle + A_part + part_after_B
+        return neighbor
+
+    def _reorder_random_blocks(self, solution):
+        """単語列を複数のブロックに分割し、それを並べ替える"""
+
+        copied_sol = solution.copy()
+
+        # 1〜max_blocks の中から適当にブロック数を決める
+        blocks_count = random.randint(2, min(self.max_blocks, len(copied_sol)))
+
+        # 境界のインデックスをランダムに選んでソート
+        boundaries = sorted(random.sample(range(1, len(copied_sol)), blocks_count - 1))
+
+        # 決定した境界に従ってブロックを抽出
+        blocks = []
+        start_idx = 0
+        for b in boundaries:
+            blocks.append(copied_sol[start_idx:b])
+            start_idx = b
+        blocks.append(copied_sol[start_idx:])  # 最後のブロック
+
+        # ブロックの並べ替え
+        random.shuffle(blocks)
+
+        # 再度つなぎ合わせる
+        neighbor = []
+        for block in blocks:
+            neighbor.extend(block)
+
         return neighbor
 
     def _swap_and_shuffle_two_random_ranges(self, solution):
@@ -146,16 +153,25 @@ class HillClimbing:
 
         return neighbor
 
+    def _choose_neighbor_function(self):
+        """定義した重みに基づいて状態遷移関数をランダム選択"""
+        # k=1 で要素を1つだけ選ぶ（戻り値はリストなので [0] で取り出す）
+        chosen_func = random.choices(
+            self.neighbor_funcs, weights=self.neighbor_weights, k=1
+        )[0]
+        return chosen_func
+
     def solve(self, text):
         current_solution = text.split()
         current_energy = scorer.get_perplexity(" ".join(current_solution))
 
         log_energies = [current_energy]
 
-        for _ in tqdm(range(self.max_iterations)):
+        for iter in tqdm(range(self.max_iter)):
             # generate neighbor
-            for _ in range(self.generation_attempts):
-                neighbor_func = random.choice(self.neighbor_funcs)
+            # for _ in range(self.generation_attempts):
+            while True:
+                neighbor_func = self._choose_neighbor_function()
                 new_solution = neighbor_func(current_solution)
                 new_text = " ".join(new_solution)
                 if new_text not in self.visited:
@@ -168,21 +184,20 @@ class HillClimbing:
                 current_solution = new_solution.copy()
                 current_energy = new_energy
                 print(f"neighbor_func: {neighbor_func}")
-                print(f"current_energy: {current_energy}")
+                print(f"best_energy!!!: {current_energy}")
 
             # log
-            log_energies.append(current_energy)
+            log_energies.append(new_energy)
 
-        return " ".join(current_solution), current_energy, log_energies
+        return " ".join(current_solution), current_energy, log_energies, _
 
 
-# function_selector: list[Literal["swap", "insertion", "reverse", "block"]]
 params = {
-    "max_iterations": 20000,
-    "random_state": 42,
+    "max_iter": 100,
+    "random_state": 57,
     "generation_attempts": 1000,
-    "function_selector": ["swap", "insertion", "reverse", "block"],
+    "max_blocks": 3,
+    "neighbor_weights": [0.3, 0.3, 0.2, 0.1, 0.1],  #
+    "visited": visited,
 }
-visited = set()
 optimizer = HillClimbing(**params)
-optimizer.solve(visited)
